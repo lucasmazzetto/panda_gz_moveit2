@@ -179,6 +179,12 @@ def generate_launch_description():
         "publish_transforms_updates": True,
     }
 
+    # 3D perception: build an Octomap in the planning scene from a point cloud (see
+    # config/sensors_3d.yaml — fed robot_vision's target-free environment cloud; the
+    # updater self-filters the robot's own links). Added to the move_group node below.
+    # None if the config is absent, so move_group just skips perception in that case.
+    sensors_3d = load_yaml(moveit_config_package, path.join("config", "sensors_3d.yaml")) or {}
+
     # MoveIt controller manager
     moveit_controller_manager_yaml = load_yaml(
         moveit_config_package, path.join("config", "moveit_controller_manager.yaml")
@@ -270,6 +276,7 @@ def generate_launch_description():
                 trajectory_execution,
                 planning_scene_monitor_parameters,
                 moveit_controller_manager,
+                sensors_3d,
                 {"use_sim_time": use_sim_time},
             ],
         ),
