@@ -1,25 +1,53 @@
-# MoveIt 3D perception: build an Octomap in the planning scene from a point cloud.
+# MoveIt 3D perception: build an Octomap in the planning scene from point clouds.
 #
-# Fed robot_vision's ENVIRONMENT cloud (/robot_vision/environment_cloud) — the full fused
-# scene MINUS the detected objects — so the octomap captures real obstacles but never the
-# manipulation target (which must stay reachable/graspable). The PointCloudOctomapUpdater
-# also self-filters the robot's own links (grown by padding), so the robot is never added
-# to the octomap either.
+# One PointCloudOctomapUpdater PER CAMERA, each fed that camera's environment cloud
+# (/robot_vision/<cam>/environment_points) — the camera's raw cloud MINUS the detected
+# targets, published by robot_vision in the CAMERA'S OWN optical frame.
 #
-# Loaded onto the move_group node by move_group.launch.py. Requires moveit_ros_perception
-# (which provides occupancy_map_monitor/PointCloudOctomapUpdater and the OccupancyMapMonitor).
+# Why per-camera / camera-frame (not the single fused world-frame cloud): the updater
+# derives its sensor origin from the cloud's frame_id. With a native camera frame it gets
+# a real viewpoint, so it (a) self-filters the robot's links correctly and (b) raycasts to
+# clear freed space as the arm moves. A fused world-frame cloud has a bogus origin (0,0,0):
+# self-filter leaks and freed cells can never be cleared, so the octomap permanently glued
+# occupied cells onto the robot's own body and blocked all planning after one move.
+#
+# The target is excluded upstream (carved from each camera cloud); the robot is excluded
+# here by the self-filter (padded links). Loaded onto move_group by move_group.launch.py.
+# Requires moveit_ros_perception.
 octomap_frame: world          # octomap is expressed in the planning frame
 octomap_resolution: 0.02      # voxel edge [m]
 
 sensors:
-  - robot_vision_octomap_updater
+  - top_camera_octomap_updater
+  - front_camera_octomap_updater
+  - left_camera_octomap_updater
 
-robot_vision_octomap_updater:
+top_camera_octomap_updater:
   sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
-  point_cloud_topic: /robot_vision/environment_cloud
+  point_cloud_topic: /robot_vision/top_camera/environment_points
   max_range: 5.0
-  point_subsample: 1          # keep every point (cloud is already voxel-downsampled upstream)
+  point_subsample: 1          # cloud is already voxel-downsampled upstream
   padding_offset: 0.02        # extra self-filter padding [m] around robot links
   padding_scale: 1.0          # multiplicative self-filter padding around robot links
   max_update_rate: 1.0        # cap octomap rebuilds [Hz]
-  filtered_cloud_topic: /move_group/octomap_filtered_cloud  # debug: points that survived filtering
+  filtered_cloud_topic: /move_group/top_camera_octomap_filtered_cloud  # debug
+
+front_camera_octomap_updater:
+  sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
+  point_cloud_topic: /robot_vision/front_camera/environment_points
+  max_range: 5.0
+  point_subsample: 1
+  padding_offset: 0.02
+  padding_scale: 1.0
+  max_update_rate: 1.0
+  filtered_cloud_topic: /move_group/front_camera_octomap_filtered_cloud
+
+left_camera_octomap_updater:
+  sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
+  point_cloud_topic: /robot_vision/left_camera/environment_points
+  max_range: 5.0
+  point_subsample: 1
+  padding_offset: 0.02
+  padding_scale: 1.0
+  max_update_rate: 1.0
+  filtered_cloud_topic: /move_group/left_camera_octomap_filtered_cloud
